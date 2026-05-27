@@ -2,168 +2,147 @@
 <html lang="th">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Share File</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
+<title>P2P File Share</title>
+
+<script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
 
 <style>
-
 body{
     font-family:Arial;
-    background:#f4f4f4;
+    background:#f5f5f5;
     padding:20px;
+    max-width:700px;
+    margin:auto;
 }
 
-.container{
-    max-width:500px;
-    margin:auto;
+.card{
     background:white;
     padding:20px;
     border-radius:12px;
+    margin-bottom:20px;
 }
 
 button{
-    width:100%;
-    padding:12px;
-    margin-top:10px;
-    border:none;
-    background:#2563eb;
-    color:white;
-    border-radius:8px;
+    padding:10px 20px;
     cursor:pointer;
 }
 
-.link{
-    margin-top:20px;
-    word-break:break-all;
+input{
+    padding:10px;
+    width:100%;
+    margin-top:10px;
 }
-
 </style>
 </head>
+
 <body>
 
-<div class="container">
+<div class="card">
 
-    <h2>Share File</h2>
+<h2>ฝั่ง Upload</h2>
 
-    <input type="file" id="fileInput">
+<p>ID ของคุณ:</p>
 
-    <button id="uploadBtn">Upload</button>
+<h3 id="myId">กำลังสร้าง...</h3>
 
-    <div class="link" id="result"></div>
+<input type="file" id="fileInput">
 
 </div>
 
-<script type="module">
+<div class="card">
 
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+<h2>ฝั่ง Download</h2>
 
-import {
-    getStorage,
-    ref,
-    uploadBytes,
-    getDownloadURL,
-    deleteObject
-} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
+<input type="text"
+       id="peerId"
+       placeholder="ใส่ Peer ID">
 
-const firebaseConfig = {
-    apiKey: "YOUR_API_KEY",
-    authDomain: "YOUR_DOMAIN",
-    projectId: "YOUR_PROJECT_ID",
-    storageBucket: "YOUR_BUCKET",
-    messagingSenderId: "XXXX",
-    appId: "XXXX"
-};
+<button onclick="connectPeer()">
+เชื่อมต่อ
+</button>
 
-const app = initializeApp(firebaseConfig);
+</div>
 
-const storage = getStorage(app);
+<script>
 
-async function uploadFile(){
+let selectedFile;
 
-    const file = document.getElementById("fileInput").files[0];
+const peer = new Peer();
 
-    if(!file){
-        alert("กรุณาเลือกไฟล์");
-        return;
-    }
+peer.on('open', (id)=>{
 
-    if(file.size > 20 * 1024 * 1024){
-        alert("ไฟล์เกิน 20MB");
-        return;
-    }
+    document.getElementById("myId").innerText = id;
+});
 
-    try{
+document.getElementById("fileInput")
+.addEventListener("change",(e)=>{
 
-        const fileName = Date.now() + "-" + file.name;
+    selectedFile = e.target.files[0];
 
-        const fileRef = ref(storage, fileName);
+    alert("เลือกไฟล์แล้ว");
+});
 
-        await uploadBytes(fileRef, file);
+peer.on('connection',(conn)=>{
 
-        const shareLink =
-            window.location.origin +
-            window.location.pathname +
-            "?file=" +
-            encodeURIComponent(fileName);
+    conn.on('data', async(data)=>{
 
-        document.getElementById("result").innerHTML = `
-            <b>ลิงก์ดาวน์โหลด</b><br><br>
-            <a href="${shareLink}" target="_blank">
-                ${shareLink}
-            </a>
-        `;
+        if(data === "REQUEST_FILE"){
 
-    }catch(err){
+            if(!selectedFile){
+                conn.send({
+                    error:"No file"
+                });
 
-        console.error(err);
+                return;
+            }
 
-        alert("Upload ไม่สำเร็จ");
-    }
-}
+            const arrayBuffer = await selectedFile.arrayBuffer();
 
-document
-    .getElementById("uploadBtn")
-    .addEventListener("click", uploadFile);
+            conn.send({
+                name:selectedFile.name,
+                type:selectedFile.type,
+                file:arrayBuffer
+            });
+        }
+    });
+});
 
-// download + auto delete
-const params = new URLSearchParams(window.location.search);
+function connectPeer(){
 
-if(params.get("file")){
+    const peerId = document.getElementById("peerId").value;
 
-    const fileName = params.get("file");
+    const conn = peer.connect(peerId);
 
-    const fileRef = ref(storage, fileName);
+    conn.on('open', ()=>{
 
-    try{
+        conn.send("REQUEST_FILE");
+    });
 
-        const url = await getDownloadURL(fileRef);
+    conn.on('data',(data)=>{
+
+        if(data.error){
+            alert(data.error);
+            return;
+        }
+
+        const blob = new Blob([data.file], {
+            type:data.type
+        });
+
+        const url = URL.createObjectURL(blob);
 
         const a = document.createElement("a");
 
         a.href = url;
 
-        a.download = fileName;
-
-        document.body.appendChild(a);
+        a.download = data.name;
 
         a.click();
 
-        document.body.removeChild(a);
-
-        // ลบหลังโหลด
-        await deleteObject(fileRef);
-
-        document.body.innerHTML = `
-            <h2>ดาวน์โหลดสำเร็จ</h2>
-            <p>ไฟล์ถูกลบแล้ว</p>
-        `;
-
-    }catch(err){
-
-        document.body.innerHTML = `
-            <h2>ไม่พบไฟล์</h2>
-        `;
-    }
+        alert("Download เริ่มแล้ว");
+    });
 }
 
 </script>
