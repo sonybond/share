@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Share File Upload / Download</title>
+
+<style>
+    *{
+        box-sizing:border-box;
+        font-family:Arial,sans-serif;
+    }
+
+    body{
+        margin:0;
+        background:#f4f6f9;
+        min-height:100vh;
+        display:flex;
+        justify-content:center;
+        align-items:center;
+        padding:20px;
+    }
+
+    .container{
+        background:white;
+        width:100%;
+        max-width:500px;
+        border-radius:16px;
+        padding:24px;
+        box-shadow:0 10px 30px rgba(0,0,0,0.1);
+    }
+
+    h1{
+        text-align:center;
+        margin-top:0;
+    }
+
+    .upload-box{
+        border:2px dashed #ccc;
+        border-radius:12px;
+        padding:20px;
+        text-align:center;
+        background:#fafafa;
+    }
+
+    button{
+        width:100%;
+        padding:14px;
+        border:none;
+        border-radius:10px;
+        background:#2563eb;
+        color:white;
+        font-size:16px;
+        cursor:pointer;
+        margin-top:12px;
+    }
+
+    button:hover{
+        background:#1d4ed8;
+    }
+
+    .file-list{
+        margin-top:25px;
+    }
+
+    .file-item{
+        display:flex;
+        justify-content:space-between;
+        align-items:center;
+        padding:12px;
+        border-radius:10px;
+        background:#f7f7f7;
+        margin-bottom:10px;
+    }
+
+    .download-btn{
+        background:#10b981;
+        color:white;
+        border:none;
+        padding:8px 12px;
+        border-radius:8px;
+        cursor:pointer;
+    }
+
+    .download-btn:hover{
+        background:#059669;
+    }
+
+    .error{
+        color:red;
+        margin-top:10px;
+    }
+
+    .success{
+        color:green;
+        margin-top:10px;
+    }
+
+    small{
+        color:#666;
+    }
+</style>
+</head>
+<body>
+
+<div class="container">
+
+    <h1>Share File</h1>
+
+    <div class="upload-box">
+
+        <p>อัปโหลดไฟล์ไม่เกิน 20MB</p>
+
+        <input type="file" id="fileInput">
+
+        <button onclick="uploadFile()">Upload</button>
+
+        <div id="message"></div>
+
+    </div>
+
+    <div class="file-list">
+
+        <h3>รายการไฟล์</h3>
+
+        <div id="filesContainer"></div>
+
+    </div>
+
+</div>
+
+<script>
+
+const MAX_SIZE = 20 * 1024 * 1024;
+
+function uploadFile(){
+
+    const input = document.getElementById("fileInput");
+    const file = input.files[0];
+    const message = document.getElementById("message");
+
+    message.innerHTML = "";
+
+    if(!file){
+        message.innerHTML = '<div class="error">กรุณาเลือกไฟล์</div>';
+        return;
+    }
+
+    if(file.size > MAX_SIZE){
+        message.innerHTML = '<div class="error">ไฟล์ใหญ่เกิน 20MB</div>';
+        return;
+    }
+
+    const reader = new FileReader();
+
+    reader.onload = function(e){
+
+        const data = {
+            id: Date.now(),
+            name: file.name,
+            size: file.size,
+            content: e.target.result
+        };
+
+        let files = JSON.parse(localStorage.getItem("sharedFiles")) || [];
+
+        files.push(data);
+
+        localStorage.setItem("sharedFiles", JSON.stringify(files));
+
+        message.innerHTML = '<div class="success">Upload สำเร็จ</div>';
+
+        input.value = "";
+
+        loadFiles();
+    };
+
+    reader.readAsDataURL(file);
+}
+
+function loadFiles(){
+
+    const container = document.getElementById("filesContainer");
+
+    let files = JSON.parse(localStorage.getItem("sharedFiles")) || [];
+
+    container.innerHTML = "";
+
+    if(files.length === 0){
+        container.innerHTML = "<p>ยังไม่มีไฟล์</p>";
+        return;
+    }
+
+    files.forEach(file => {
+
+        const item = document.createElement("div");
+        item.className = "file-item";
+
+        item.innerHTML = `
+            <div>
+                <strong>${file.name}</strong><br>
+                <small>${formatSize(file.size)}</small>
+            </div>
+
+            <button class="download-btn"
+                onclick="downloadAndDelete(${file.id})">
+                Download
+            </button>
+        `;
+
+        container.appendChild(item);
+    });
+}
+
+function downloadAndDelete(id){
+
+    let files = JSON.parse(localStorage.getItem("sharedFiles")) || [];
+
+    const file = files.find(f => f.id === id);
+
+    if(!file){
+        alert("ไม่พบไฟล์");
+        return;
+    }
+
+    // ดาวน์โหลดไฟล์
+    const a = document.createElement("a");
+    a.href = file.content;
+    a.download = file.name;
+
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+
+    // ลบไฟล์หลังดาวน์โหลด
+    files = files.filter(f => f.id !== id);
+
+    localStorage.setItem("sharedFiles", JSON.stringify(files));
+
+    // รีโหลดรายการ
+    loadFiles();
+}
+
+function formatSize(bytes){
+
+    if(bytes < 1024){
+        return bytes + " B";
+    }
+
+    if(bytes < 1024 * 1024){
+        return (bytes / 1024).toFixed(2) + " KB";
+    }
+
+    return (bytes / (1024 * 1024)).toFixed(2) + " MB";
+}
+
+loadFiles();
+
+</script>
+
+</body>
+</html>
