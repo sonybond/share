@@ -1,260 +1,170 @@
 <!DOCTYPE html>
 <html lang="th">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>Share File Upload / Download</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Share File</title>
 
 <style>
-    *{
-        box-sizing:border-box;
-        font-family:Arial,sans-serif;
-    }
 
-    body{
-        margin:0;
-        background:#f4f6f9;
-        min-height:100vh;
-        display:flex;
-        justify-content:center;
-        align-items:center;
-        padding:20px;
-    }
+body{
+    font-family:Arial;
+    background:#f4f4f4;
+    padding:20px;
+}
 
-    .container{
-        background:white;
-        width:100%;
-        max-width:500px;
-        border-radius:16px;
-        padding:24px;
-        box-shadow:0 10px 30px rgba(0,0,0,0.1);
-    }
+.container{
+    max-width:500px;
+    margin:auto;
+    background:white;
+    padding:20px;
+    border-radius:12px;
+}
 
-    h1{
-        text-align:center;
-        margin-top:0;
-    }
+button{
+    width:100%;
+    padding:12px;
+    margin-top:10px;
+    border:none;
+    background:#2563eb;
+    color:white;
+    border-radius:8px;
+    cursor:pointer;
+}
 
-    .upload-box{
-        border:2px dashed #ccc;
-        border-radius:12px;
-        padding:20px;
-        text-align:center;
-        background:#fafafa;
-    }
+.link{
+    margin-top:20px;
+    word-break:break-all;
+}
 
-    button{
-        width:100%;
-        padding:14px;
-        border:none;
-        border-radius:10px;
-        background:#2563eb;
-        color:white;
-        font-size:16px;
-        cursor:pointer;
-        margin-top:12px;
-    }
-
-    button:hover{
-        background:#1d4ed8;
-    }
-
-    .file-list{
-        margin-top:25px;
-    }
-
-    .file-item{
-        display:flex;
-        justify-content:space-between;
-        align-items:center;
-        padding:12px;
-        border-radius:10px;
-        background:#f7f7f7;
-        margin-bottom:10px;
-    }
-
-    .download-btn{
-        background:#10b981;
-        color:white;
-        border:none;
-        padding:8px 12px;
-        border-radius:8px;
-        cursor:pointer;
-    }
-
-    .download-btn:hover{
-        background:#059669;
-    }
-
-    .error{
-        color:red;
-        margin-top:10px;
-    }
-
-    .success{
-        color:green;
-        margin-top:10px;
-    }
-
-    small{
-        color:#666;
-    }
 </style>
 </head>
 <body>
 
 <div class="container">
 
-    <h1>Share File</h1>
+    <h2>Share File</h2>
 
-    <div class="upload-box">
+    <input type="file" id="fileInput">
 
-        <p>อัปโหลดไฟล์ไม่เกิน 20MB</p>
+    <button id="uploadBtn">Upload</button>
 
-        <input type="file" id="fileInput">
-
-        <button onclick="uploadFile()">Upload</button>
-
-        <div id="message"></div>
-
-    </div>
-
-    <div class="file-list">
-
-        <h3>รายการไฟล์</h3>
-
-        <div id="filesContainer"></div>
-
-    </div>
+    <div class="link" id="result"></div>
 
 </div>
 
-<script>
+<script type="module">
 
-const MAX_SIZE = 20 * 1024 * 1024;
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 
-function uploadFile(){
+import {
+    getStorage,
+    ref,
+    uploadBytes,
+    getDownloadURL,
+    deleteObject
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
-    const input = document.getElementById("fileInput");
-    const file = input.files[0];
-    const message = document.getElementById("message");
+const firebaseConfig = {
+    apiKey: "YOUR_API_KEY",
+    authDomain: "YOUR_DOMAIN",
+    projectId: "YOUR_PROJECT_ID",
+    storageBucket: "YOUR_BUCKET",
+    messagingSenderId: "XXXX",
+    appId: "XXXX"
+};
 
-    message.innerHTML = "";
+const app = initializeApp(firebaseConfig);
+
+const storage = getStorage(app);
+
+async function uploadFile(){
+
+    const file = document.getElementById("fileInput").files[0];
 
     if(!file){
-        message.innerHTML = '<div class="error">กรุณาเลือกไฟล์</div>';
+        alert("กรุณาเลือกไฟล์");
         return;
     }
 
-    if(file.size > MAX_SIZE){
-        message.innerHTML = '<div class="error">ไฟล์ใหญ่เกิน 20MB</div>';
+    if(file.size > 20 * 1024 * 1024){
+        alert("ไฟล์เกิน 20MB");
         return;
     }
 
-    const reader = new FileReader();
+    try{
 
-    reader.onload = function(e){
+        const fileName = Date.now() + "-" + file.name;
 
-        const data = {
-            id: Date.now(),
-            name: file.name,
-            size: file.size,
-            content: e.target.result
-        };
+        const fileRef = ref(storage, fileName);
 
-        let files = JSON.parse(localStorage.getItem("sharedFiles")) || [];
+        await uploadBytes(fileRef, file);
 
-        files.push(data);
+        const shareLink =
+            window.location.origin +
+            window.location.pathname +
+            "?file=" +
+            encodeURIComponent(fileName);
 
-        localStorage.setItem("sharedFiles", JSON.stringify(files));
-
-        message.innerHTML = '<div class="success">Upload สำเร็จ</div>';
-
-        input.value = "";
-
-        loadFiles();
-    };
-
-    reader.readAsDataURL(file);
-}
-
-function loadFiles(){
-
-    const container = document.getElementById("filesContainer");
-
-    let files = JSON.parse(localStorage.getItem("sharedFiles")) || [];
-
-    container.innerHTML = "";
-
-    if(files.length === 0){
-        container.innerHTML = "<p>ยังไม่มีไฟล์</p>";
-        return;
-    }
-
-    files.forEach(file => {
-
-        const item = document.createElement("div");
-        item.className = "file-item";
-
-        item.innerHTML = `
-            <div>
-                <strong>${file.name}</strong><br>
-                <small>${formatSize(file.size)}</small>
-            </div>
-
-            <button class="download-btn"
-                onclick="downloadAndDelete(${file.id})">
-                Download
-            </button>
+        document.getElementById("result").innerHTML = `
+            <b>ลิงก์ดาวน์โหลด</b><br><br>
+            <a href="${shareLink}" target="_blank">
+                ${shareLink}
+            </a>
         `;
 
-        container.appendChild(item);
-    });
+    }catch(err){
+
+        console.error(err);
+
+        alert("Upload ไม่สำเร็จ");
+    }
 }
 
-function downloadAndDelete(id){
+document
+    .getElementById("uploadBtn")
+    .addEventListener("click", uploadFile);
 
-    let files = JSON.parse(localStorage.getItem("sharedFiles")) || [];
+// download + auto delete
+const params = new URLSearchParams(window.location.search);
 
-    const file = files.find(f => f.id === id);
+if(params.get("file")){
 
-    if(!file){
-        alert("ไม่พบไฟล์");
-        return;
+    const fileName = params.get("file");
+
+    const fileRef = ref(storage, fileName);
+
+    try{
+
+        const url = await getDownloadURL(fileRef);
+
+        const a = document.createElement("a");
+
+        a.href = url;
+
+        a.download = fileName;
+
+        document.body.appendChild(a);
+
+        a.click();
+
+        document.body.removeChild(a);
+
+        // ลบหลังโหลด
+        await deleteObject(fileRef);
+
+        document.body.innerHTML = `
+            <h2>ดาวน์โหลดสำเร็จ</h2>
+            <p>ไฟล์ถูกลบแล้ว</p>
+        `;
+
+    }catch(err){
+
+        document.body.innerHTML = `
+            <h2>ไม่พบไฟล์</h2>
+        `;
     }
-
-    // ดาวน์โหลดไฟล์
-    const a = document.createElement("a");
-    a.href = file.content;
-    a.download = file.name;
-
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-
-    // ลบไฟล์หลังดาวน์โหลด
-    files = files.filter(f => f.id !== id);
-
-    localStorage.setItem("sharedFiles", JSON.stringify(files));
-
-    // รีโหลดรายการ
-    loadFiles();
 }
-
-function formatSize(bytes){
-
-    if(bytes < 1024){
-        return bytes + " B";
-    }
-
-    if(bytes < 1024 * 1024){
-        return (bytes / 1024).toFixed(2) + " KB";
-    }
-
-    return (bytes / (1024 * 1024)).toFixed(2) + " MB";
-}
-
-loadFiles();
 
 </script>
 
